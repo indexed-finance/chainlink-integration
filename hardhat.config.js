@@ -20,13 +20,17 @@ module.exports = {
 
   defaultNetwork: "hardhat",
   networks: {
+	  // use this for the basic getter setter functions
     hardhat: {
-      forking: {
-        url: "https://mainnet.infura.io/v3/"
-
+     (forking: {
+       url: "https://mainnet.infura.io/v3/_INFURA_ID"
       }
     },
-
+	// use this for the main function test case
+    //rinkeby: {
+    //  url: `https://rinkeby.infura.io/v3/_INFURA_ID_`,
+    // accounts: ['_ACCOUNT_PK_']
+    //},
   },
   solidity: {
     compilers: [

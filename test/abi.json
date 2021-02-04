@@ -124,19 +124,32 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "_addr",
+        "name": "token",
         "type": "address"
       }
     ],
-    "name": "addressToString",
+    "name": "canUpdatePrice",
     "outputs": [
       {
-        "internalType": "string",
+        "internalType": "bool",
         "name": "",
-        "type": "string"
+        "type": "bool"
       }
     ],
-    "stateMutability": "pure",
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "fee",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -219,25 +232,6 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "contractAddress",
-        "type": "address"
-      }
-    ],
-    "name": "requestCoinGeckoData",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "requestId",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "bytes32",
         "name": "",
         "type": "bytes32"
@@ -252,6 +246,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "newfee",
+        "type": "uint256"
+      }
+    ],
+    "name": "setChainlinkNodeFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -286,25 +293,11 @@
         "internalType": "uint256",
         "name": "lastPriceTimestamp",
         "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
+      },
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "tokenwhitelist",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
+        "internalType": "bool",
+        "name": "whitelisted",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
