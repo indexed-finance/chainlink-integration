@@ -1,14 +1,3 @@
-//SPDX-License-Identifier: Unlicense
-
-// RINKEBY CONFIG
-// oracle = 0x7AFe1118Ea78C1eae84ca8feE5C65Bc76CcF879e;
-// jobId = '6d1bfe27e7034b1d87b5270556b17277';
-
-// MAINNET CONFIG
-// NOTE: for the node provider and job id you can choose from a list of various providers from https://market.link/
-// oracle = 0x240BaE5A27233Fd3aC5440B5a598467725F7D1cd;
-// jobId = '1bc4f827ff5942eaaa7540b7dd1e20b9';
-
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
@@ -17,10 +6,10 @@ import '@chainlink/contracts/src/v0.6/ChainlinkClient.sol';
 import '@openzeppelin/contracts/access/Ownable.sol';
 import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
-import './interfaces/ICirculatingMarketCapOracle.sol';
+import '../interfaces/ICirculatingMarketCapOracle.sol';
 
-
-contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle {
+// Mock example taken from - https://github.com/tweether-protocol/tweether/blob/master/contracts/mocks/MockOracleClient.sol
+contract ChainlinkMcapMock is Ownable, ChainlinkClient, ICirculatingMarketCapOracle {
   /// @notice the chainlink job id
   bytes32 jobId;
 
@@ -54,7 +43,7 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
   * @param _jobId   Chainlink job id
   */
   constructor(uint256 _delay, address _oracle, bytes32 _jobId) public {
-    setPublicChainlinkToken();
+    // setPublicChainlinkToken();
 
     minimumDelay = _delay;
     oracle = _oracle;
@@ -100,7 +89,7 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
       require(canUpdatePrice(_tokenAddresses[i]), 'ChainlinkMcap: Minimum delay not reached');
 
       //start chainlink call
-      requestCoinGeckoData(_tokenAddresses[i]);
+      // requestCoinGeckoData(_tokenAddresses[i]);
     }
   }
 
@@ -173,12 +162,17 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
     delete pendingRequestMap[_requestId];
   }
 
+  function fulfillMock(address _tokenAddress, uint256 _marketcap) public {
+    tokenMap[_tokenAddress].lastPriceTimestamp = now;
+    tokenMap[_tokenAddress].marketcap = _marketcap;
+  }
+
   /**
    * @dev Receive back all link token which were sent to the contract
    */
   function withdrawLink() public onlyOwner {
-    IERC20 linkToken = IERC20(chainlinkTokenAddress());
-    linkToken.transfer(owner(), linkToken.balanceOf(address(this)));
+    // IERC20 linkToken = IERC20(chainlinkTokenAddress());
+    // linkToken.transfer(owner(), linkToken.balanceOf(address(this)));
   }
 
   /**
