@@ -20,7 +20,7 @@ describe('ChainlinkMcap', function(){
         [owner, addr1, addr2, addr3, addr4] = await ethers.getSigners();
 
         chainlinkContract = await ethers.getContractFactory('ChainlinkMcapMock');
-        chainlinkContract = await chainlinkContract.deploy(0, OracleAddress, ethers.utils.toUtf8Bytes(ChainlinkJobId));
+        chainlinkContract = await chainlinkContract.deploy(0, 86400, OracleAddress, ethers.utils.toUtf8Bytes(ChainlinkJobId));
     });
 
     it('should be able to find the deployed contract', async function(){
@@ -68,7 +68,7 @@ describe('ChainlinkMcap', function(){
           await chainlinkContract.removeTokensFromWhitelist([SnxAddress]);
 
           expect(chainlinkContract.updateCirculatingMarketCaps([SnxAddress])).to.be.reverted;
-        })
+        });
     });
 
     describe('getCirculatingMarketCap()', function(){
@@ -87,8 +87,17 @@ describe('ChainlinkMcap', function(){
         // reset for future tests
         await chainlinkContract.fulfillMock(SnxAddress, 0);
         await chainlinkContract.removeTokensFromWhitelist([SnxAddress]);
+      });
 
-      })
+      it('should revert when marketcap is expired', async function(){
+        await chainlinkContract.fulfillMock(SnxAddress, 1337);
+        await chainlinkContract.setTimeToExpire(0);
+        expect(chainlinkContract.getCirculatingMarketCap([SnxAddress])).to.be.reverted;
+
+        // reset test
+        await chainlinkContract.fulfillMock(SnxAddress, 0);
+        await chainlinkContract.setTimeToExpire(86400);
+      });
     });
 
     describe('getCirculatingMarketCaps()', function(){
@@ -96,10 +105,7 @@ describe('ChainlinkMcap', function(){
         expect(chainlinkContract.getCirculatingMarketCap([AaveAddress, SnxAddress])).to.be.reverted;
         await chainlinkContract.addTokensToWhitelist([AaveAddress, SnxAddress]);
 
-        let marketcaps = await chainlinkContract.getCirculatingMarketCaps([AaveAddress, SnxAddress]);
-        expect(marketcaps[0]).to.equal(0);
-        expect(marketcaps[1]).to.equal(0);
-
+        await chainlinkContract.fulfillMock(AaveAddress, 0);
         await chainlinkContract.fulfillMock(SnxAddress, 1337);
 
         marketcaps = await chainlinkContract.getCirculatingMarketCaps([AaveAddress, SnxAddress]);
@@ -109,6 +115,21 @@ describe('ChainlinkMcap', function(){
         // reset for future tests
         await chainlinkContract.fulfillMock(SnxAddress, 0);
         await chainlinkContract.removeTokensFromWhitelist([AaveAddress, SnxAddress]);
+      });
+
+      it('should revert when marketcap is expired', async function(){
+        await chainlinkContract.fulfillMock(AaveAddress, 1337);
+        await chainlinkContract.fulfillMock(SnxAddress, 1337);
+        await chainlinkContract.setTimeToExpire(0);
+
+        expect(chainlinkContract.getCirculatingMarketCap([AaveAddress, SnxAddress])).to.be.reverted;
+        expect(chainlinkContract.getCirculatingMarketCap([SnxAddress])).to.be.reverted;
+        expect(chainlinkContract.getCirculatingMarketCap([AaveAddress])).to.be.reverted;
+
+        // reset test
+        await chainlinkContract.fulfillMock(SnxAddress, 0);
+        await chainlinkContract.fulfillMock(AaveAddress, 0);
+        await chainlinkContract.setTimeToExpire(86400);
       });
     });
 
@@ -129,9 +150,30 @@ describe('ChainlinkMcap', function(){
       });
 
       it('should not be able to modify minDelay as non-owner', async function(){
-        expect(chainlinkContract.connect(addr1).setMinimumDelay(5)).to.be.reverted;
+        expect(chainlinkContract.connect(addr1).setTimeToExpire(5)).to.be.reverted;
       });
     });
+
+    describe('setTimeToExpire()', function(){
+      it('should have the right timeToExpire set', async function(){
+        let timeToExpire = await chainlinkContract.timeToExpire();
+        expect(timeToExpire).to.equal(86400);
+      });
+
+      it('should be able to modify timeToExpire', async function(){
+        await chainlinkContract.setTimeToExpire(5);
+        let timeToExpire = await chainlinkContract.timeToExpire();
+        expect(timeToExpire).to.equal(5);
+
+        // reset timeToExpire to 86400
+        await chainlinkContract.setTimeToExpire(86400);
+      });
+
+      it('should not be able to modify timeToExpire as non-owner', async function(){
+        expect(chainlinkContract.connect(addr1).setTimeToExpire(5)).to.be.reverted;
+      });
+    });
+
 
     describe('withdraw()', function(){
       it('should allow only owners to withdraw', async function(){

@@ -11,6 +11,7 @@ import '../interfaces/ICirculatingMarketCapOracle.sol';
 // Mock example taken from - https://github.com/tweether-protocol/tweether/blob/master/contracts/mocks/MockOracleClient.sol
 contract ChainlinkMcapMock is Ownable, ChainlinkClient, ICirculatingMarketCapOracle {
   uint256 public minimumDelay;
+  uint256 public timeToExpire;
   uint256 public fee = 0.1 * 10 ** 18; // 0.1 LINK
 
   address public oracle;
@@ -31,10 +32,11 @@ contract ChainlinkMcapMock is Ownable, ChainlinkClient, ICirculatingMarketCapOra
   * @param _oracle  Chainlink oracle address
   * @param _jobId   Chainlink job id
   */
-  constructor(uint256 _delay, address _oracle, bytes32 _jobId) public {
+  constructor(uint256 _delay, uint256 _timeToExpire, address _oracle, bytes32 _jobId) public {
     // setPublicChainlinkToken();
 
     minimumDelay = _delay;
+    timeToExpire = _timeToExpire;
     oracle = _oracle;
     jobId = _jobId;
   }
@@ -76,6 +78,7 @@ contract ChainlinkMcapMock is Ownable, ChainlinkClient, ICirculatingMarketCapOra
 
   function getCirculatingMarketCap(address _tokenAddress) override external view returns (uint256){
     require(tokenMap[_tokenAddress].whitelisted, 'ChainlinkMcap: Token is not whitelisted');
+    require(now - tokenMap[_tokenAddress].lastPriceTimestamp < timeToExpire , 'ChainlinkMcap: Marketcap has expired');
 
     return tokenMap[_tokenAddress].marketcap;
   }
@@ -85,6 +88,8 @@ contract ChainlinkMcapMock is Ownable, ChainlinkClient, ICirculatingMarketCapOra
 
     for (uint256 i = 0; i < _tokenAddresses.length; i++){
       require(tokenMap[_tokenAddresses[i]].whitelisted, 'ChainlinkMcap: Token is not whitelisted');
+      require(now - tokenMap[_tokenAddresses[i]].lastPriceTimestamp < timeToExpire , 'ChainlinkMcap: Marketcap has expired');
+
       marketcaps[i] = tokenMap[_tokenAddresses[i]].marketcap;
     }
 
@@ -187,6 +192,14 @@ contract ChainlinkMcapMock is Ownable, ChainlinkClient, ICirculatingMarketCapOra
   }
 
   /**
+   * @dev Change timeToExpire
+   */
+  function setTimeToExpire(uint _newMaxAge) public onlyOwner {
+    timeToExpire = _newMaxAge;
+    emit newTimeToExpire(_newMaxAge);
+  }
+
+  /**
   * Changes the chainlink node operator fee to be sent
   */
   function setChainlinkNodeFee(uint _newFee) public onlyOwner {
@@ -197,4 +210,6 @@ contract ChainlinkMcapMock is Ownable, ChainlinkClient, ICirculatingMarketCapOra
   event tokenAdded(address);
   event tokenRemoved(address);
   event newMinimumDelay(uint);
+  event newTimeToExpire(uint);
+
 }
