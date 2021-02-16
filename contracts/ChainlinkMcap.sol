@@ -21,30 +21,19 @@ import './interfaces/ICirculatingMarketCapOracle.sol';
 
 
 contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle {
-  /// @notice the chainlink job id
-  bytes32 jobId;
-
-  /// @notice the chainlink node
-  address public oracle;
-
-  /// @notice global minium delay
   uint256 public minimumDelay;
-
-  /// @notice chainlink fee
   uint256 public fee = 0.1 * 10 ** 18; // 0.1 LINK
 
+  address public oracle;
+  bytes32 jobId;
 
-  /// @notice struct for chainlink tokens info
   struct tokenDetails {
     uint256 marketcap;
     uint256 lastPriceTimestamp;
     bool whitelisted;
   }
 
-  /// @notice mapping for address to tokenDetails
   mapping (address => tokenDetails) public tokenMap;
-
-  /// @notice request map to store the token address and the Chainlink id
   mapping(bytes32 => address) public pendingRequestMap;
 
   /**
@@ -78,13 +67,6 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
     return string(str);
   }
 
-  /**
-  * @dev check if a certain price can be updated
-  * returns bool
-  */
-  function canUpdatePrice(address _token) public view returns (bool) {
-    return tokenMap[_token].lastPriceTimestamp + minimumDelay < now;
-  }
 
   /**
   * @dev Updates the tokens from the token list
@@ -97,7 +79,7 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
       require(tokenMap[_tokenAddresses[i]].whitelisted, 'ChainlinkMcap: Token is not whitelisted');
 
       // check if we can update the price
-      require(canUpdatePrice(_tokenAddresses[i]), 'ChainlinkMcap: Minimum delay not reached');
+      require(tokenMap[_tokenAddresses[i]].lastPriceTimestamp + minimumDelay < now, 'ChainlinkMcap: Minimum delay not reached');
 
       //start chainlink call
       requestCoinGeckoData(_tokenAddresses[i]);
@@ -174,7 +156,7 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
   }
 
   /**
-   * @dev Receive back all link token which were sent to the contract
+   * @dev Withdraw Link tokens in contract to owner address
    */
   function withdrawLink() public onlyOwner {
     IERC20 linkToken = IERC20(chainlinkTokenAddress());
@@ -182,10 +164,7 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
   }
 
   /**
-   * @dev Gets a list of addresses
-   *
-   * Adds all the tokens from the list to the global whitelist
-   * only owner can call this
+   * @dev Whitelist a list of token addresses
    */
   function addTokensToWhitelist(address[] memory _whitelist) public onlyOwner {
     for (uint256 i = 0; i < _whitelist.length; i++){
@@ -194,20 +173,17 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
   }
 
   /**
-   * @dev Gets a list of addresses
-   *
-   * Removes all tokens in the list from thr gloval whitelist
-   * only owner can call this
+   * @dev Remove a list of token addresses from whitelist
    */
   function removeTokensFromWhitelist(address[] memory _whitelist) public onlyOwner {
     for (uint256 i = 0; i < _whitelist.length; i++){
-      delete tokenMap[_whitelist[i]];
+      tokenMap[_whitelist[i]].whitelisted = false;
     }
   }
 
   /**
-  * Adds the token whitelist
-  */
+   * @dev Change minimumDelay
+   */
   function setMinimumDelay(uint _newDelay) public onlyOwner {
     minimumDelay = _newDelay;
     emit newMinimumDelay(_newDelay);

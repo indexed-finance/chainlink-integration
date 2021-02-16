@@ -58,10 +58,24 @@ describe('ChainlinkMcap', function(){
           await chainlinkContract.setMinimumDelay(0);
           await chainlinkContract.fulfillMock(SnxAddress, 0);
         });
+
+        it('should remove token from whitelist if requested', async function(){
+
+          expect(chainlinkContract.updateCirculatingMarketCaps([SnxAddress])).to.be.reverted;
+
+          await chainlinkContract.addTokensToWhitelist([SnxAddress]);
+          await chainlinkContract.updateCirculatingMarketCaps([SnxAddress]);
+          await chainlinkContract.removeTokensFromWhitelist([SnxAddress]);
+
+          expect(chainlinkContract.updateCirculatingMarketCaps([SnxAddress])).to.be.reverted;
+        })
     });
 
     describe('getCirculatingMarketCap()', function(){
       it('should fetch the latest marketcap', async function(){
+        expect(chainlinkContract.getCirculatingMarketCap([SnxAddress])).to.be.reverted;
+        await chainlinkContract.addTokensToWhitelist([SnxAddress]);
+
         let marketcap = await chainlinkContract.getCirculatingMarketCap(SnxAddress);
         expect(marketcap).to.equal(0);
 
@@ -72,11 +86,16 @@ describe('ChainlinkMcap', function(){
 
         // reset for future tests
         await chainlinkContract.fulfillMock(SnxAddress, 0);
+        await chainlinkContract.removeTokensFromWhitelist([SnxAddress]);
+
       })
     });
 
     describe('getCirculatingMarketCaps()', function(){
       it('should fetch the latest marketcaps', async function(){
+        expect(chainlinkContract.getCirculatingMarketCap([AaveAddress, SnxAddress])).to.be.reverted;
+        await chainlinkContract.addTokensToWhitelist([AaveAddress, SnxAddress]);
+
         let marketcaps = await chainlinkContract.getCirculatingMarketCaps([AaveAddress, SnxAddress]);
         expect(marketcaps[0]).to.equal(0);
         expect(marketcaps[1]).to.equal(0);
@@ -89,6 +108,7 @@ describe('ChainlinkMcap', function(){
 
         // reset for future tests
         await chainlinkContract.fulfillMock(SnxAddress, 0);
+        await chainlinkContract.removeTokensFromWhitelist([AaveAddress, SnxAddress]);
       });
     });
 
