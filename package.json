@@ -1,6 +1,6 @@
 {
-  "name": "ndx_link",
-  "version": "1.0.0",
+  "name": "@indexed-finance/chainlink-oracle",
+  "version": "0.0.1",
   "description": "",
   "main": "index.js",
   "scripts": {
