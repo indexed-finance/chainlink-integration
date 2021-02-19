@@ -14,7 +14,7 @@ const {
 } = require('./utils');
 
 
-describe('ChainlinkMcap', function () {
+describe('CirculatingMarketCapOracle', function () {
   let chainlinkContract;
   let beforeupdaterequesttimestamp;
   let link;
@@ -29,7 +29,7 @@ describe('ChainlinkMcap', function () {
     before(async () => {
       link = await deploy('MockERC20', 'Chainlink', 'LINK');
       chainlinkContract = await deploy(
-        'ChainlinkMcapMock',
+        'MockCirculatingMarketCapOracle',
         MinimumDelay,
         TimeToExpire,
         OracleAddress,
@@ -63,7 +63,7 @@ describe('ChainlinkMcap', function () {
     })
 
     it('fee()', async () => {
-      expect(await chainlinkContract.fee()).to.eq(1e17);
+      expect(await chainlinkContract.fee()).to.eq(BigNumber.from(10).pow(17));
     })
   })
 
@@ -78,10 +78,10 @@ describe('ChainlinkMcap', function () {
 
     it('should revert when updating non-whitelisted addresses', async function () {
       expect(chainlinkContract.updateCirculatingMarketCaps([AaveAddress])).to.be.revertedWith(
-        "ChainlinkMcap: Token is not whitelisted"
+        "CirculatingMarketCapOracle: Token is not whitelisted"
       );
       expect(chainlinkContract.updateCirculatingMarketCaps([SnxAddress])).to.be.revertedWith(
-        "ChainlinkMcap: Token is not whitelisted"
+        "CirculatingMarketCapOracle: Token is not whitelisted"
       );
     });
 
@@ -167,7 +167,7 @@ describe('ChainlinkMcap', function () {
       const amount = BigNumber.from(2).pow(208);
       await expect(
         chainlinkContract.fulfill(sha3(SnxAddress), amount)
-      ).to.be.revertedWith('ChainlinkMcap: uint exceeds 208 bits');
+      ).to.be.revertedWith('CirculatingMarketCapOracle: uint exceeds 208 bits');
     })
 
     it('should mark latest timestamp, update market cap, remove pending request', async () => {
@@ -192,7 +192,7 @@ describe('ChainlinkMcap', function () {
     it('should revert if market cap does not exist', async () => {
       expect(
         chainlinkContract.getCirculatingMarketCap(SnxAddress)
-      ).to.be.revertedWith('ChainlinkMcap: Marketcap has expired');
+      ).to.be.revertedWith('CirculatingMarketCapOracle: Marketcap has expired');
     })
 
     it('should fetch the latest market cap', async function () {
@@ -209,7 +209,7 @@ describe('ChainlinkMcap', function () {
       await fastForward(TimeToExpire);
       expect(
         chainlinkContract.getCirculatingMarketCap(SnxAddress)
-      ).to.be.revertedWith('ChainlinkMcap: Marketcap has expired');
+      ).to.be.revertedWith('CirculatingMarketCapOracle: Marketcap has expired');
     });
   });
 
@@ -219,7 +219,7 @@ describe('ChainlinkMcap', function () {
     it('should revert if any market cap does not exist', async () => {
       expect(
         chainlinkContract.getCirculatingMarketCaps([SnxAddress, AaveAddress])
-      ).to.be.revertedWith('ChainlinkMcap: Marketcap has expired');
+      ).to.be.revertedWith('CirculatingMarketCapOracle: Marketcap has expired');
     })
 
     it('should fetch the latest market caps', async function () {
@@ -236,7 +236,7 @@ describe('ChainlinkMcap', function () {
       await fastForward(TimeToExpire);
       expect(
         chainlinkContract.getCirculatingMarketCaps([SnxAddress, AaveAddress])
-      ).to.be.revertedWith('ChainlinkMcap: Marketcap has expired');
+      ).to.be.revertedWith('CirculatingMarketCapOracle: Marketcap has expired');
     });
   });
 
@@ -302,7 +302,7 @@ describe('ChainlinkMcap', function () {
 
     it('should be able to withdraw as owner', async function () {
       await chainlinkContract.setChainlinkNodeFee(10000);
-      expect(await chainlinkContract.fee()).to.eq(1000);
+      expect(await chainlinkContract.fee()).to.eq(10000);
     })
   })
 });
