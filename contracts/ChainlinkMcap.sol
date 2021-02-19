@@ -1,117 +1,137 @@
-//SPDX-License-Identifier: Unlicense
-
-// RINKEBY CONFIG
-// oracle = 0x7AFe1118Ea78C1eae84ca8feE5C65Bc76CcF879e;
-// jobId = '6d1bfe27e7034b1d87b5270556b17277';
-
-// MAINNET CONFIG
-// NOTE: for the node provider and job id you can choose from a list of various providers from https://market.link/
-// oracle = 0x240BaE5A27233Fd3aC5440B5a598467725F7D1cd;
-// jobId = '1bc4f827ff5942eaaa7540b7dd1e20b9';
-
+//SPDX-License-Identifier: MIT
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 // IMPORTS
-import '@chainlink/contracts/src/v0.6/ChainlinkClient.sol';
-import '@openzeppelin/contracts/access/Ownable.sol';
-import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import "@chainlink/contracts/src/v0.6/ChainlinkClient.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import './interfaces/ICirculatingMarketCapOracle.sol';
+import "./interfaces/ICirculatingMarketCapOracle.sol";
+
 
 
 contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle {
-  uint256 public minimumDelay;
-  uint256 public timeToExpire;
-  uint256 public fee = 0.1 * 10 ** 18; // 0.1 LINK
+/* ==========  Events  ========== */
 
-  address public oracle;
-  bytes32 jobId;
+  event TokenAdded(address token);
+  event TokenRemoved(address token);
+  event NewMinimumDelay(uint256 minimumDelay);
+  event NewTimeToExpire(uint256 timeToExpire);
+  event NewChainlinkFee(uint256 fee);
 
-  struct tokenDetails {
-    uint256 marketcap;
-    uint256 lastPriceTimestamp;
+/* ==========  Structs  ========== */
+
+  struct TokenDetails {
     bool whitelisted;
+    bool hasPendingRequest;
+    uint32 lastPriceTimestamp;
+    uint208 marketCap;
   }
 
-  mapping (address => tokenDetails) public tokenMap;
+/* ==========  Storage  ========== */
+
+  /** @dev Minimum delay between Chainlink queries for a token's market cap */
+  uint256 public minimumDelay;
+  /** @dev Maximum age of a market cap value that can be queried */
+  uint256 public timeToExpire;
+  /** @dev Amount of LINK paid for each query */
+  uint256 public fee = 1e17; // 0.1 LINK
+  /** @dev Address of the Chainlink node */
+  address public oracle;
+  /** @dev Chainlink job ID */
+  bytes32 public jobId;
+
+  mapping(address => TokenDetails) public getTokenDetails;
   mapping(bytes32 => address) public pendingRequestMap;
 
   /**
   * @dev Constructor
-  * @param _delay   Minimum delay in seconds before token price can be updated again
-  * @param _oracle  Chainlink oracle address
-  * @param _jobId   Chainlink job id
+  * @param _minimumDelay Minimum delay in seconds before token price can be updated again.
+  * @param _timeToExpire Maximum age of a market cap record that can be queried.
+  * @param _oracle Chainlink oracle address.
+  * @param _jobId Chainlink job id.
+  * @param _link Chainlink token address.
   */
-  constructor(uint256 _delay, uint256 _timeToExpire, address _oracle, bytes32 _jobId) public {
-    setPublicChainlinkToken();
-
-    minimumDelay = _delay;
+  constructor(
+    uint256 _minimumDelay,
+    uint256 _timeToExpire,
+    address _oracle,
+    bytes32 _jobId,
+    address _link
+  ) public Ownable() {
+    minimumDelay = _minimumDelay;
     timeToExpire = _timeToExpire;
     oracle = _oracle;
     jobId = _jobId;
+    setChainlinkToken(_link);
   }
+
+/* ==========  Public Actions  ========== */
 
   /**
-  * @dev Internal function to convert an address to a string memory
-  */
-  function addressToString(address _addr) internal pure returns(string memory) {
-    bytes32 value = bytes32(uint256(_addr));
-    bytes memory alphabet = '0123456789abcdef';
-
-    bytes memory str = new bytes(42);
-    str[0] = '0';
-    str[1] = 'x';
-    for (uint256 i = 0; i < 20; i++) {
-      str[2+i*2] = alphabet[uint8(value[i + 12] >> 4)];
-      str[3+i*2] = alphabet[uint8(value[i + 12] & 0x0f)];
-    }
-    return string(str);
-  }
-
-
-  /**
-  * @dev Updates the tokens from the token list
-  * checks if the prices are in the time limit so they can be updated
-  * calls the chainlink request function
-  */
-  function updateCirculatingMarketCaps(address[] calldata _tokenAddresses) override external {
-    for (uint256 i = 0; i < _tokenAddresses.length; i++){
-      // check if token is whitelisted
-      require(tokenMap[_tokenAddresses[i]].whitelisted, 'ChainlinkMcap: Token is not whitelisted');
-
-      // check if we can update the price
-      require(tokenMap[_tokenAddresses[i]].lastPriceTimestamp + minimumDelay < now, 'ChainlinkMcap: Minimum delay not reached');
-
-      //start chainlink call
-      requestCoinGeckoData(_tokenAddresses[i]);
+   * @dev Requests the market caps for a set of tokens from Chainlink.
+   *
+   * Note: If token is not whitelisted, this function will revert.
+   * If the token already has a pending request, or the last update is too
+   * recent, this will not revert but a new request will not be created.
+   */
+  function updateCirculatingMarketCaps(address[] calldata _tokenAddresses) external override {
+    for (uint256 i = 0; i < _tokenAddresses.length; i++) {
+      address token = _tokenAddresses[i];
+      TokenDetails storage details = getTokenDetails[token];
+      // If token is not whitelisted, don't pay to update it.
+      require(details.whitelisted, "ChainlinkMcap: Token is not whitelisted");
+      // If token already has a pending update request, or the last update is too
+      // new, fail gracefully.
+      if (
+        details.hasPendingRequest ||
+        now - details.lastPriceTimestamp < minimumDelay
+      ) {
+        continue;
+      }
+      details.hasPendingRequest = true;
+      // Execute Chainlink request
+      bytes32 requestId = requestCoinGeckoData(_tokenAddresses[i]);
+      // Add requestId to pendingRequest
+      pendingRequestMap[requestId] = token;
     }
   }
 
-  function getCirculatingMarketCap(address _tokenAddress) override external view returns (uint256){
-    require(tokenMap[_tokenAddress].whitelisted, 'ChainlinkMcap: Token is not whitelisted');
-    require(now - tokenMap[_tokenAddress].lastPriceTimestamp < timeToExpire , 'ChainlinkMcap: Marketcap has expired');
+/* ==========  Market Cap Queries  ========== */
 
-    return tokenMap[_tokenAddress].marketcap;
-  }
+  function getCirculatingMarketCaps(address[] calldata _tokens)
+    external
+    view
+    override
+    returns (uint256[] memory marketCaps)
+  {
+    uint256 len = _tokens.length;
+    marketCaps = new uint256[](len);
 
-  function getCirculatingMarketCaps(address[] calldata _tokenAddresses) override external view returns (uint256[] memory){
-    uint256[] memory marketcaps = new uint256[](_tokenAddresses.length);
-
-    for (uint256 i = 0; i < _tokenAddresses.length; i++){
-      require(tokenMap[_tokenAddresses[i]].whitelisted, 'ChainlinkMcap: Token is not whitelisted');
-      require(now - tokenMap[_tokenAddresses[i]].lastPriceTimestamp < timeToExpire , 'ChainlinkMcap: Marketcap has expired');
-
-      marketcaps[i] = tokenMap[_tokenAddresses[i]].marketcap;
+    for (uint256 i = 0; i < len; i++) {
+      marketCaps[i] = getCirculatingMarketCap(_tokens[i]);
     }
-
-    return marketcaps;
   }
+
+  function getCirculatingMarketCap(address token) public view override returns (uint256) {
+    require(
+      now - getTokenDetails[token].lastPriceTimestamp < timeToExpire,
+      "ChainlinkMcap: Marketcap has expired"
+    );
+
+    return getTokenDetails[token].marketCap;
+  }
+
+  function isTokenWhitelisted(address token) external view override returns (bool) {
+    return getTokenDetails[token].whitelisted;
+  }
+
+/* ==========  Chainlink Functions  ========== */
 
   /**
   * @dev Create a Chainlink request to retrieve API response, find the target
-  * data, then multiply 10^6 to get rid of the decimal.
-  * returns the request id for the node operator
+  * data, then multiply 1e18 to normalize the value as a token amount.
   *
   * CoinGecko API Example:
   * {
@@ -122,52 +142,62 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
   *   }
   *
   * https://docs.chain.link/docs/make-a-http-get-request#api-consumer
+  *
+  * @param _token Address of the token to query the circulating market cap of.
+  * @return requestId The request id for the node operator
   */
-  function requestCoinGeckoData(address _contractAddress) internal returns (bytes32 requestId) {
-    Chainlink.Request memory request = buildChainlinkRequest(jobId, address(this), this.fulfill.selector);
+  function requestCoinGeckoData(address _token) internal virtual returns (bytes32 requestId) {
+    Chainlink.Request memory request = buildChainlinkRequest(
+      jobId,
+      address(this),
+      this.fulfill.selector
+    );
 
-    string memory contractAddressString = addressToString(_contractAddress);
+    string memory contractAddressString = addressToString(_token);
 
     // Build the CoinGecko request URL
-    string memory requestString = string(abi.encodePacked('https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=', contractAddressString, '&vs_currencies=usd&include_market_cap=true'));
+    string memory url = getCoingeckoMarketCapUrl(contractAddressString);
 
     // Set the request object to perform a GET request with the constructed URL
-    request.add('get', requestString);
+    request.add("get", url);
 
     // Build path to parse JSON response from CoinGecko
-    // e.g. '0x514910771af9ca656af840dff83e8264ecf986ca.usd_market_cap'
-    string memory pathString = string(abi.encodePacked(contractAddressString, '.usd_market_cap'));
-    request.add('path', pathString);
+    // e.g. '0x514910771af9ca656af840dff83e8264ecf986ca.eth_market_cap'
+    string memory pathString = string(abi.encodePacked(contractAddressString, ".eth_market_cap"));
+    request.add("path", pathString);
 
-    // Multiply by 18 decimal places even though CoinGecko returns usd_marketcap w/ precision of 6 decimal places.
-    // This prevents the edge case where we truncate too much if CoinGecko decides to return < 6 decimal places.
-    int multiplyAmount = 10**18;
-    request.addInt('times', multiplyAmount);
+    // Multiply by 1e18 to format the number as an ether value in wei.
+    request.addInt("times", 1e18);
 
     // Sends the request
-    bytes32 requestid = sendChainlinkRequestTo(oracle, request, fee);
-
-    // Add requestId to pendingRequest
-    pendingRequestMap[requestid] = _contractAddress;
-    return requestid;
+    return sendChainlinkRequestTo(oracle, request, fee);
   }
 
   /**
-  * @dev Callback function for Chainlink node. Updates the token mapping and removes the request from pendingRequestMap
+  * @dev Callback function for Chainlink node.
+  * Updates the token mapping and removes the request from pendingRequestMap
   */
-  function fulfill(bytes32 _requestId, uint256 _marketcap) public recordChainlinkFulfillment(_requestId) {
+  function fulfill(bytes32 _requestId, uint256 _marketCap) external virtual recordChainlinkFulfillment(_requestId) {
+    // Wraps the internal function to simplify automated testing with mocks.
+    _fulfill(_requestId, _marketCap);
+  }
+
+  function _fulfill(bytes32 _requestId, uint256 _marketCap) internal {
     address tokenAddress = pendingRequestMap[_requestId];
 
-    tokenMap[tokenAddress].lastPriceTimestamp = now;
-    tokenMap[tokenAddress].marketcap = _marketcap;
+    getTokenDetails[tokenAddress].lastPriceTimestamp = uint32(now);
+    getTokenDetails[tokenAddress].marketCap = _safeUint208(_marketCap);
+    getTokenDetails[tokenAddress].hasPendingRequest = false;
 
     delete pendingRequestMap[_requestId];
   }
 
+/* ==========  Control Functions  ========== */
+
   /**
    * @dev Withdraw Link tokens in contract to owner address
    */
-  function withdrawLink() public onlyOwner {
+  function withdrawLink() external onlyOwner {
     IERC20 linkToken = IERC20(chainlinkTokenAddress());
     linkToken.transfer(owner(), linkToken.balanceOf(address(this)));
   }
@@ -175,47 +205,79 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
   /**
    * @dev Whitelist a list of token addresses
    */
-  function addTokensToWhitelist(address[] memory _whitelist) public onlyOwner {
-    for (uint256 i = 0; i < _whitelist.length; i++){
-      tokenMap[_whitelist[i]].whitelisted = true;
+  function addTokensToWhitelist(address[] calldata _tokens) external onlyOwner {
+    uint256 len = _tokens.length;
+    for (uint256 i = 0; i < len; i++) {
+      address token = _tokens[i];
+      getTokenDetails[token].whitelisted = true;
+      emit TokenAdded(token);
     }
   }
 
   /**
    * @dev Remove a list of token addresses from whitelist
    */
-  function removeTokensFromWhitelist(address[] memory _whitelist) public onlyOwner {
-    for (uint256 i = 0; i < _whitelist.length; i++){
-      tokenMap[_whitelist[i]].whitelisted = false;
+  function removeTokensFromWhitelist(address[] calldata _tokens) external onlyOwner {
+    for (uint256 i = 0; i < _tokens.length; i++){
+      address token = _tokens[i];
+      getTokenDetails[token].whitelisted = false;
+      emit TokenRemoved(token);
     }
   }
 
   /**
    * @dev Change minimumDelay
    */
-  function setMinimumDelay(uint _newDelay) public onlyOwner {
+  function setMinimumDelay(uint256 _newDelay) external onlyOwner {
     minimumDelay = _newDelay;
-    emit newMinimumDelay(_newDelay);
+    emit NewMinimumDelay(_newDelay);
   }
 
   /**
    * @dev Change timeToExpire
    */
-  function setTimeToExpire(uint _newMaxAge) public onlyOwner {
-    timeToExpire = _newMaxAge;
-    emit newTimeToExpire(_newMaxAge);
+  function setTimeToExpire(uint256 _timeToExpire) external onlyOwner {
+    timeToExpire = _timeToExpire;
+    emit NewTimeToExpire(_timeToExpire);
   }
 
   /**
-  * Changes the chainlink node operator fee to be sent
+  * @dev Changes the chainlink node operator fee to be sent
   */
-  function setChainlinkNodeFee(uint _newFee) public onlyOwner {
-    fee = _newFee;
+  function setChainlinkNodeFee(uint256 _fee) external onlyOwner {
+    fee = _fee;
+    emit NewChainlinkFee(_fee);
   }
 
-  // Events
-  event tokenAdded(address);
-  event tokenRemoved(address);
-  event newMinimumDelay(uint);
-  event newTimeToExpire(uint);
+/* ==========  Utility Functions  ========== */
+
+  /**
+   * @dev Internal function to convert an address to a string memory
+   */
+  function addressToString(address _addr) public pure returns(string memory) {
+    bytes32 value = bytes32(uint256(_addr));
+    bytes memory alphabet = "0123456789abcdef";
+
+    bytes memory str = new bytes(40);
+    for (uint256 i = 0; i < 20; i++) {
+      str[i*2] = alphabet[uint8(value[i + 12] >> 4)];
+      str[1 + i*2] = alphabet[uint8(value[i + 12] & 0x0f)];
+    }
+    return string(str);
+  }
+
+  function getCoingeckoMarketCapUrl(string memory contractAddressString) public pure returns (string memory url) {
+    url = string(
+      abi.encodePacked(
+        "https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=0x",
+        contractAddressString,
+        "&vs_currencies=eth&include_market_cap=true"
+      )
+    );
+  }
+
+  function _safeUint208(uint256 x) internal pure returns (uint208 y) {
+    y = uint208(x);
+    require(x == y, "ChainlinkMcap: uint exceeds 208 bits");
+  }
 }
