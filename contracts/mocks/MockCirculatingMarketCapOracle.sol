@@ -1,10 +1,10 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import "../ChainlinkMcap.sol";
+import "../CirculatingMarketCapOracle.sol";
 
 
-contract ChainlinkMcapMock is ChainlinkMcap {
+contract MockCirculatingMarketCapOracle is CirculatingMarketCapOracle {
   constructor(
     uint256 _delay,
     uint256 _timeToExpire,
@@ -13,7 +13,7 @@ contract ChainlinkMcapMock is ChainlinkMcap {
     address _link
   )
     public
-    ChainlinkMcap(_delay, _timeToExpire, _oracle, _jobId, _link)
+    CirculatingMarketCapOracle(_delay, _timeToExpire, _oracle, _jobId, _link)
   {}
 
   function requestCoinGeckoData(address _token) internal override returns (bytes32 requestId) {
