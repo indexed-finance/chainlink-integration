@@ -93,27 +93,45 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
       details.hasPendingRequest = true;
       // Execute Chainlink request
       bytes32 requestId = requestCoinGeckoData(_tokenAddresses[i]);
-      // Add requestId to pendingRequest
+      // Map requestId to the token address
       pendingRequestMap[requestId] = token;
     }
   }
 
 /* ==========  Market Cap Queries  ========== */
 
-  function getCirculatingMarketCaps(address[] calldata _tokens)
+  /**
+   * @dev Query the latest circulating market caps for a set of tokens.
+   *
+   * Note: Reverts if any of the tokens has no stored market cap or if the last
+   * market cap is older than `timeToExpire` seconds.
+   *
+   * @param tokens Addresses of tokens to get market caps for.
+   * @return marketCaps Array of latest markets cap for tokens
+   */
+  function getCirculatingMarketCaps(address[] calldata tokens)
     external
     view
     override
     returns (uint256[] memory marketCaps)
   {
-    uint256 len = _tokens.length;
+    uint256 len = tokens.length;
     marketCaps = new uint256[](len);
 
     for (uint256 i = 0; i < len; i++) {
-      marketCaps[i] = getCirculatingMarketCap(_tokens[i]);
+      marketCaps[i] = getCirculatingMarketCap(tokens[i]);
     }
   }
 
+  /**
+   * @dev Query the latest circulating market cap for a token.
+   *
+   * Note: Reverts if the token has no stored market cap or if the last
+   * market cap is older than `timeToExpire` seconds.
+   *
+   * @param token Address of token to get market cap for.
+   * @return uint256 of latest market cap for token
+   */
   function getCirculatingMarketCap(address token) public view override returns (uint256) {
     require(
       now - getTokenDetails[token].lastPriceTimestamp < timeToExpire,
@@ -123,6 +141,11 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
     return getTokenDetails[token].marketCap;
   }
 
+  /**
+   * @dev Check if a token is whitelisted.
+   * @param token Address to check
+   * @return boolean indicating whether token is whitelisted
+   */
   function isTokenWhitelisted(address token) external view override returns (bool) {
     return getTokenDetails[token].whitelisted;
   }
