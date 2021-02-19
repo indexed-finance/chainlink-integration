@@ -11,22 +11,24 @@ This contract:
 
 `npm install`
 
-## Test
+## Scripts
 
-`npx hardhat test`
+### Test
+`npm run test`
 
-## Generate Coverage Report
+### Generate Coverage Report
+`npm run coverage`
 
-`npx hardhat coverage`
+### Compile Solidity Files
+`npm run build`
 
 ## Configuration Values
 
-RINKEBY CONFIG
-
+### Rinkeby
 oracle = 0x7AFe1118Ea78C1eae84ca8feE5C65Bc76CcF879e;
 jobId = '6d1bfe27e7034b1d87b5270556b17277';
 
-MAINNET CONFIG
+### Mainnet
 NOTE: for the node provider and job id you can choose from a list of various providers from https://market.link/
 oracle = 0x240BaE5A27233Fd3aC5440B5a598467725F7D1cd;
 jobId = '1bc4f827ff5942eaaa7540b7dd1e20b9';
