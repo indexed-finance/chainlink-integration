@@ -11,7 +11,7 @@ import "./interfaces/ICirculatingMarketCapOracle.sol";
 
 
 
-contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle {
+contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMarketCapOracle {
 /* ==========  Events  ========== */
 
   event TokenAdded(address token);
@@ -81,7 +81,7 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
       address token = _tokenAddresses[i];
       TokenDetails storage details = getTokenDetails[token];
       // If token is not whitelisted, don't pay to update it.
-      require(details.whitelisted, "ChainlinkMcap: Token is not whitelisted");
+      require(details.whitelisted, "CirculatingMarketCapOracle: Token is not whitelisted");
       // If token already has a pending update request, or the last update is too
       // new, fail gracefully.
       if (
@@ -135,7 +135,7 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
   function getCirculatingMarketCap(address token) public view override returns (uint256) {
     require(
       now - getTokenDetails[token].lastPriceTimestamp < timeToExpire,
-      "ChainlinkMcap: Marketcap has expired"
+      "CirculatingMarketCapOracle: Marketcap has expired"
     );
 
     return getTokenDetails[token].marketCap;
@@ -301,6 +301,6 @@ contract ChainlinkMcap is Ownable, ChainlinkClient, ICirculatingMarketCapOracle 
 
   function _safeUint208(uint256 x) internal pure returns (uint208 y) {
     y = uint208(x);
-    require(x == y, "ChainlinkMcap: uint exceeds 208 bits");
+    require(x == y, "CirculatingMarketCapOracle: uint exceeds 208 bits");
   }
 }
