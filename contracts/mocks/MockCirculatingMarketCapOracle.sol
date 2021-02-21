@@ -10,11 +10,11 @@ contract MockCirculatingMarketCapOracle is CirculatingMarketCapOracle {
     uint256 _maximumAge,
     uint256 _requestTimeout,
     address _oracle,
-    bytes32 _jobId,
+    bytes32 _jobID,
     address _link
   )
     public
-    CirculatingMarketCapOracle(_delay, _maximumAge, _requestTimeout, _oracle, _jobId, _link)
+    CirculatingMarketCapOracle(_delay, _maximumAge, _requestTimeout, _oracle, _jobID, _link)
   {}
 
   function requestCoinGeckoData(address _token) internal override returns (bytes32 requestId) {

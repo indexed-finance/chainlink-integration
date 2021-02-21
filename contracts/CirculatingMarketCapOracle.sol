@@ -43,7 +43,7 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
   /** @dev Address of the Chainlink node */
   address public oracle;
   /** @dev Chainlink job ID */
-  bytes32 public jobId;
+  bytes32 public jobID;
 
   mapping(address => TokenDetails) public getTokenDetails;
   mapping(bytes32 => address) public pendingRequestMap;
@@ -54,7 +54,7 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
   * @param _maximumAge Maximum age of a market cap record that can be queried.
   * @param _requestTimeout Maximum age of a request before allowing the query to be retried.
   * @param _oracle Chainlink oracle address.
-  * @param _jobId Chainlink job id.
+  * @param _jobID Chainlink job id.
   * @param _link Chainlink token address.
   */
   constructor(
@@ -62,14 +62,14 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
     uint256 _maximumAge,
     uint256 _requestTimeout,
     address _oracle,
-    bytes32 _jobId,
+    bytes32 _jobID,
     address _link
   ) public Ownable() {
     minimumDelay = _minimumDelay;
     maximumAge = _maximumAge;
     requestTimeout = _requestTimeout;
     oracle = _oracle;
-    jobId = _jobId;
+    jobID = _jobID;
     setChainlinkToken(_link);
   }
 
@@ -195,7 +195,7 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
   */
   function requestCoinGeckoData(address _token) internal virtual returns (bytes32 requestId) {
     Chainlink.Request memory request = buildChainlinkRequest(
-      jobId,
+      jobID,
       address(this),
       this.fulfill.selector
     );

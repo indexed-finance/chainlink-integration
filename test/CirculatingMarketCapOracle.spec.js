@@ -63,8 +63,8 @@ describe('CirculatingMarketCapOracle', function () {
       expect(await chainlinkContract.oracle()).to.eq(OracleAddress)
     })
 
-    it('jobId()', async () => {
-      expect(await chainlinkContract.jobId()).to.eq('0x' + Buffer.from(ethers.utils.toUtf8Bytes(ChainlinkJobId)).toString('hex'));
+    it('jobID()', async () => {
+      expect(await chainlinkContract.jobID()).to.eq('0x' + Buffer.from(ethers.utils.toUtf8Bytes(ChainlinkJobId)).toString('hex'));
     })
 
     it('fee()', async () => {
