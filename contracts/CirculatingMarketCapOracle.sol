@@ -125,7 +125,6 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
    */
   function cancelExpiredRequest(address token) external {
     TokenDetails storage details = getTokenDetails[token];
-    // If token is not whitelisted, don't pay to update it.
     require(
       details.hasPendingRequest &&
       now - details.lastRequestTimestamp >= requestTimeout,
