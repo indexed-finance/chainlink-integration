@@ -3,6 +3,13 @@
   "version": "0.0.1",
   "description": "",
   "main": "index.js",
+  "files": [
+    "contracts/interfaces",
+    "contracts/CirculatingMarketCapOracle.sol",
+    "artifacts/contracts/interfaces/ICirculatingMarketCapOracle.sol",
+    "artifacts/contracts/CirculatingMarketCapOracle.sol",
+    "deployments/"
+  ],
   "scripts": {
     "build": "npx hardhat compile",
     "test": "npx hardhat test",
