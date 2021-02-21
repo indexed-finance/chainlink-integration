@@ -2,14 +2,26 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-// IMPORTS
 import "@chainlink/contracts/src/v0.6/ChainlinkClient.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
 import "./interfaces/ICirculatingMarketCapOracle.sol";
 
 
+
+/**
+ * @dev Contract for querying tokens' circulating market caps from CoinGecko via Chainlink.
+ *
+ * The contract's owner may whitelist or dewhitelist tokens.
+ * Only whitelisted tokens' market caps can be requested from Chainlink.
+ * This contract requires LINK to operate and assumes that the owner has supplied it with LINK.
+ * If it does not have enough LINK to execute a request, it will revert.
+ *
+ * Returned market caps are denominated in wei units of Ether.
+ * Each token's market cap can be queried from Chainlink once every `minimumDelay` seconds.
+ * If the last update to the market cap is older than `maximumAge`, queries for the token's
+ * market cap will revert.
+ */
 contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMarketCapOracle {
 /* ==========  Events  ========== */
 
