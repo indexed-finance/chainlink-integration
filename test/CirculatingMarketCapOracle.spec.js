@@ -6,17 +6,17 @@ const {
   AaveAddress,
   SnxAddress,
   MinimumDelay,
-  TimeToExpire,
+  MaximumAge,
   sha3,
   deploy,
   getTransactionTimestamp,
-  fastForward
+  fastForward,
+  RequestTimeout
 } = require('./utils');
 
 
 describe('CirculatingMarketCapOracle', function () {
   let chainlinkContract;
-  let beforeupdaterequesttimestamp;
   let link;
 
   let owner, addr1, addr2, addr3, addr4;
@@ -31,7 +31,8 @@ describe('CirculatingMarketCapOracle', function () {
       chainlinkContract = await deploy(
         'MockCirculatingMarketCapOracle',
         MinimumDelay,
-        TimeToExpire,
+        MaximumAge,
+        RequestTimeout,
         OracleAddress,
         ethers.utils.toUtf8Bytes(ChainlinkJobId),
         link.address
@@ -50,8 +51,12 @@ describe('CirculatingMarketCapOracle', function () {
       expect(await chainlinkContract.minimumDelay()).to.eq(MinimumDelay)
     })
 
-    it('timeToExpire()', async () => {
-      expect(await chainlinkContract.timeToExpire()).to.eq(TimeToExpire)
+    it('maximumAge()', async () => {
+      expect(await chainlinkContract.maximumAge()).to.eq(MaximumAge)
+    })
+
+    it('requestTimeout', async () => {
+      expect(await chainlinkContract.requestTimeout()).to.eq(RequestTimeout)
     })
 
     it('oracle()', async () => {
@@ -75,12 +80,13 @@ describe('CirculatingMarketCapOracle', function () {
 
   describe('updateCirculatingMarketCaps()', function () {
     setupTests();
+    let timestamp;
 
     it('should revert when updating non-whitelisted addresses', async function () {
-      expect(chainlinkContract.updateCirculatingMarketCaps([AaveAddress])).to.be.revertedWith(
+      await expect(chainlinkContract.updateCirculatingMarketCaps([AaveAddress])).to.be.revertedWith(
         "CirculatingMarketCapOracle: Token is not whitelisted"
       );
-      expect(chainlinkContract.updateCirculatingMarketCaps([SnxAddress])).to.be.revertedWith(
+      await expect(chainlinkContract.updateCirculatingMarketCaps([SnxAddress])).to.be.revertedWith(
         "CirculatingMarketCapOracle: Token is not whitelisted"
       );
     });
@@ -88,7 +94,8 @@ describe('CirculatingMarketCapOracle', function () {
     it('should allow updating of whitelisted addresses', async function () {
       // Whitelist and attempt to update SNX
       await chainlinkContract.addTokensToWhitelist([SnxAddress, AaveAddress]);
-      await chainlinkContract.updateCirculatingMarketCaps([SnxAddress, AaveAddress]);
+      const tx = await chainlinkContract.updateCirculatingMarketCaps([SnxAddress, AaveAddress]);
+      timestamp = await getTransactionTimestamp(tx);
     });
 
     it('should mark the tokens as pending', async () => {
@@ -96,6 +103,13 @@ describe('CirculatingMarketCapOracle', function () {
       const { hasPendingRequest: hasPendingRequest2 } = await chainlinkContract.getTokenDetails(AaveAddress);
       expect(hasPendingRequest1).to.be.true;
       expect(hasPendingRequest2).to.be.true;
+    })
+
+    it('should mark the request timestamp', async () => {
+      const { lastRequestTimestamp: lastRequestTimestamp1 } = await chainlinkContract.getTokenDetails(SnxAddress);
+      const { lastRequestTimestamp: lastRequestTimestamp2 } = await chainlinkContract.getTokenDetails(AaveAddress);
+      expect(lastRequestTimestamp1).to.eq(timestamp);
+      expect(lastRequestTimestamp2).to.eq(timestamp);
     })
 
     it('should save the token for the request ID', async () => {
@@ -123,6 +137,34 @@ describe('CirculatingMarketCapOracle', function () {
     });
   });
 
+
+
+  describe('cancelExpiredRequest()', function () {
+    setupTests();
+    let timestamp;
+
+    it('should revert when token has no pending request', async function () {
+      await expect(chainlinkContract.cancelExpiredRequest(AaveAddress)).to.be.revertedWith(
+        "CirculatingMarketCapOracle: Request has not expired or does not exist"
+      );
+    });
+
+    it('should revert when request is too new', async function () {
+      await chainlinkContract.addTokensToWhitelist([SnxAddress]);
+      await chainlinkContract.updateCirculatingMarketCaps([SnxAddress]);
+      await expect(chainlinkContract.cancelExpiredRequest(SnxAddress)).to.be.revertedWith(
+        "CirculatingMarketCapOracle: Request has not expired or does not exist"
+      );
+    });
+
+    it('should reset `hasPendingRequest` if request timeout has elapsed', async () => {
+      expect((await chainlinkContract.getTokenDetails(SnxAddress)).hasPendingRequest).to.be.true;
+      await fastForward(RequestTimeout + 1)
+      await chainlinkContract.cancelExpiredRequest(SnxAddress);
+      expect((await chainlinkContract.getTokenDetails(SnxAddress)).hasPendingRequest).to.be.false;
+    })
+  });
+
   describe('addTokensToWhitelist()', () => {
     setupTests();
 
@@ -143,7 +185,7 @@ describe('CirculatingMarketCapOracle', function () {
     setupTests();
 
     it('should not be able to dewhitelist tokens as non-owner', async function () {
-      expect(
+      await expect(
         chainlinkContract.connect(addr1).removeTokensFromWhitelist([SnxAddress, AaveAddress])
       ).to.be.revertedWith('Ownable: caller is not the owner');
     });
@@ -161,13 +203,13 @@ describe('CirculatingMarketCapOracle', function () {
   describe('fulfill()', () => {
     setupTests();
 
-    it('should revert if market cap exceeds uint208', async () => {
+    it('should revert if market cap exceeds uint176', async () => {
       await chainlinkContract.addTokensToWhitelist([SnxAddress]);
       await chainlinkContract.updateCirculatingMarketCaps([SnxAddress]);
-      const amount = BigNumber.from(2).pow(208);
+      const amount = BigNumber.from(2).pow(176);
       await expect(
         chainlinkContract.fulfill(sha3(SnxAddress), amount)
-      ).to.be.revertedWith('CirculatingMarketCapOracle: uint exceeds 208 bits');
+      ).to.be.revertedWith('CirculatingMarketCapOracle: uint exceeds 176 bits');
     })
 
     it('should mark latest timestamp, update market cap, remove pending request', async () => {
@@ -190,7 +232,7 @@ describe('CirculatingMarketCapOracle', function () {
     setupTests();
 
     it('should revert if market cap does not exist', async () => {
-      expect(
+      await expect(
         chainlinkContract.getCirculatingMarketCap(SnxAddress)
       ).to.be.revertedWith('CirculatingMarketCapOracle: Marketcap has expired');
     })
@@ -206,7 +248,7 @@ describe('CirculatingMarketCapOracle', function () {
     });
 
     it('should revert when market cap is expired', async function () {
-      await fastForward(TimeToExpire);
+      await fastForward(MaximumAge);
       expect(
         chainlinkContract.getCirculatingMarketCap(SnxAddress)
       ).to.be.revertedWith('CirculatingMarketCapOracle: Marketcap has expired');
@@ -217,7 +259,7 @@ describe('CirculatingMarketCapOracle', function () {
     setupTests();
 
     it('should revert if any market cap does not exist', async () => {
-      expect(
+      await expect(
         chainlinkContract.getCirculatingMarketCaps([SnxAddress, AaveAddress])
       ).to.be.revertedWith('CirculatingMarketCapOracle: Marketcap has expired');
     })
@@ -233,8 +275,8 @@ describe('CirculatingMarketCapOracle', function () {
     });
 
     it('should revert when any market cap is expired', async function () {
-      await fastForward(TimeToExpire);
-      expect(
+      await fastForward(MaximumAge);
+      await expect(
         chainlinkContract.getCirculatingMarketCaps([SnxAddress, AaveAddress])
       ).to.be.revertedWith('CirculatingMarketCapOracle: Marketcap has expired');
     });
@@ -242,7 +284,7 @@ describe('CirculatingMarketCapOracle', function () {
 
   describe('setMinimumDelay()', function () {
     it('should not be able to modify minDelay as non-owner', async function () {
-      expect(
+      await expect(
         chainlinkContract.connect(addr1).setMinimumDelay(5)
       ).to.be.revertedWith('Ownable: caller is not the owner');
     });
@@ -253,35 +295,35 @@ describe('CirculatingMarketCapOracle', function () {
     });
   });
 
-  describe('setTimeToExpire()', function () {
-    it('should not be able to modify timeToExpire as non-owner', async function () {
-      expect(
-        chainlinkContract.connect(addr1).setTimeToExpire(5)
+  describe('setMaximumAge()', function () {
+    it('should not be able to modify maximumAge as non-owner', async function () {
+      await expect(
+        chainlinkContract.connect(addr1).setMaximumAge(5)
       ).to.be.revertedWith('Ownable: caller is not the owner');
     });
 
-    it('should be able to modify timeToExpire as owner', async function () {
-      await chainlinkContract.setTimeToExpire(5);
-      expect(await chainlinkContract.timeToExpire()).to.equal(5);
+    it('should be able to modify maximumAge as owner', async function () {
+      await chainlinkContract.setMaximumAge(5);
+      expect(await chainlinkContract.maximumAge()).to.equal(5);
     });
   });
 
-  describe('setTimeToExpire()', function () {
-    it('should not be able to modify timeToExpire as non-owner', async function () {
-      expect(
-        chainlinkContract.connect(addr1).setTimeToExpire(5)
+  describe('setRequestTimeout()', function () {
+    it('should not be able to modify requestTimeout as non-owner', async function () {
+      await expect(
+        chainlinkContract.connect(addr1).setRequestTimeout(5)
       ).to.be.revertedWith('Ownable: caller is not the owner');
     });
 
-    it('should be able to modify timeToExpire as owner', async function () {
-      await chainlinkContract.setTimeToExpire(5);
-      expect(await chainlinkContract.timeToExpire()).to.equal(5);
+    it('should be able to modify requestTimeout as owner', async function () {
+      await chainlinkContract.setRequestTimeout(5);
+      expect(await chainlinkContract.requestTimeout()).to.equal(5);
     });
   });
 
   describe('withdrawLink()', function () {
     it('should not be able to withdraw as non-owner', async function () {
-      expect(
+      await expect(
         chainlinkContract.connect(addr1).withdrawLink()
       ).to.be.revertedWith('Ownable: caller is not the owner');
     });
@@ -295,7 +337,7 @@ describe('CirculatingMarketCapOracle', function () {
 
   describe('setChainlinkNodeFee()', function () {
     it('should not be able to set fee as non-owner', async function () {
-      expect(
+      await expect(
         chainlinkContract.connect(addr1).setChainlinkNodeFee(10000)
       ).to.be.revertedWith('Ownable: caller is not the owner');
     });
