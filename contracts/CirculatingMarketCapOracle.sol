@@ -16,7 +16,8 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
   event TokenAdded(address token);
   event TokenRemoved(address token);
   event NewMinimumDelay(uint256 minimumDelay);
-  event NewTimeToExpire(uint256 timeToExpire);
+  event NewMaximumAge(uint256 maximumAge);
+  event NewRequestTimeout(uint256 requestTimeout);
   event NewChainlinkFee(uint256 fee);
 
 /* ==========  Structs  ========== */
@@ -25,7 +26,8 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
     bool whitelisted;
     bool hasPendingRequest;
     uint32 lastPriceTimestamp;
-    uint208 marketCap;
+    uint32 lastRequestTimestamp;
+    uint176 marketCap;
   }
 
 /* ==========  Storage  ========== */
@@ -33,7 +35,9 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
   /** @dev Minimum delay between Chainlink queries for a token's market cap */
   uint256 public minimumDelay;
   /** @dev Maximum age of a market cap value that can be queried */
-  uint256 public timeToExpire;
+  uint256 public maximumAge;
+  /** @dev Maximum age of a request before allowing the query to be retried. */
+  uint256 public requestTimeout;
   /** @dev Amount of LINK paid for each query */
   uint256 public fee = 1e17; // 0.1 LINK
   /** @dev Address of the Chainlink node */
@@ -47,20 +51,23 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
   /**
   * @dev Constructor
   * @param _minimumDelay Minimum delay in seconds before token price can be updated again.
-  * @param _timeToExpire Maximum age of a market cap record that can be queried.
+  * @param _maximumAge Maximum age of a market cap record that can be queried.
+  * @param _requestTimeout Maximum age of a request before allowing the query to be retried.
   * @param _oracle Chainlink oracle address.
   * @param _jobId Chainlink job id.
   * @param _link Chainlink token address.
   */
   constructor(
     uint256 _minimumDelay,
-    uint256 _timeToExpire,
+    uint256 _maximumAge,
+    uint256 _requestTimeout,
     address _oracle,
     bytes32 _jobId,
     address _link
   ) public Ownable() {
     minimumDelay = _minimumDelay;
-    timeToExpire = _timeToExpire;
+    maximumAge = _maximumAge;
+    requestTimeout = _requestTimeout;
     oracle = _oracle;
     jobId = _jobId;
     setChainlinkToken(_link);
@@ -90,11 +97,29 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
         continue;
       }
       details.hasPendingRequest = true;
+      details.lastRequestTimestamp = uint32(now);
       // Execute Chainlink request
       bytes32 requestId = requestCoinGeckoData(_tokenAddresses[i]);
       // Map requestId to the token address
       pendingRequestMap[requestId] = token;
     }
+  }
+
+  /**
+   * @dev Cancel an expired request by setting `hasPendingRequest` to false.
+   *
+   * Note: Does not actually cancel the request on Chainlink, only marks the
+   * token as not having a pending request so it can be queried again.
+   */
+  function cancelExpiredRequest(address token) external {
+    TokenDetails storage details = getTokenDetails[token];
+    // If token is not whitelisted, don't pay to update it.
+    require(
+      details.hasPendingRequest &&
+      now - details.lastRequestTimestamp >= requestTimeout,
+      "CirculatingMarketCapOracle: Request has not expired or does not exist"
+    );
+    details.hasPendingRequest = false;
   }
 
 /* ==========  Market Cap Queries  ========== */
@@ -103,7 +128,7 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
    * @dev Query the latest circulating market caps for a set of tokens.
    *
    * Note: Reverts if any of the tokens has no stored market cap or if the last
-   * market cap is older than `timeToExpire` seconds.
+   * market cap is older than `maximumAge` seconds.
    *
    * @param tokens Addresses of tokens to get market caps for.
    * @return marketCaps Array of latest markets cap for tokens
@@ -126,14 +151,14 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
    * @dev Query the latest circulating market cap for a token.
    *
    * Note: Reverts if the token has no stored market cap or if the last
-   * market cap is older than `timeToExpire` seconds.
+   * market cap is older than `maximumAge` seconds.
    *
    * @param token Address of token to get market cap for.
    * @return uint256 of latest market cap for token
    */
   function getCirculatingMarketCap(address token) public view override returns (uint256) {
     require(
-      now - getTokenDetails[token].lastPriceTimestamp < timeToExpire,
+      now - getTokenDetails[token].lastPriceTimestamp < maximumAge,
       "CirculatingMarketCapOracle: Marketcap has expired"
     );
 
@@ -208,7 +233,7 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
     address tokenAddress = pendingRequestMap[_requestId];
 
     getTokenDetails[tokenAddress].lastPriceTimestamp = uint32(now);
-    getTokenDetails[tokenAddress].marketCap = _safeUint208(_marketCap);
+    getTokenDetails[tokenAddress].marketCap = _safeUint176(_marketCap);
     getTokenDetails[tokenAddress].hasPendingRequest = false;
 
     delete pendingRequestMap[_requestId];
@@ -256,11 +281,19 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
   }
 
   /**
-   * @dev Change timeToExpire
+   * @dev Change maximumAge
    */
-  function setTimeToExpire(uint256 _timeToExpire) external onlyOwner {
-    timeToExpire = _timeToExpire;
-    emit NewTimeToExpire(_timeToExpire);
+  function setMaximumAge(uint256 _maximumAge) external onlyOwner {
+    maximumAge = _maximumAge;
+    emit NewMaximumAge(_maximumAge);
+  }
+
+  /**
+   * @dev Change requestTimeout
+   */
+  function setRequestTimeout(uint256 _requestTimeout) external onlyOwner {
+    requestTimeout = _requestTimeout;
+    emit NewRequestTimeout(_requestTimeout);
   }
 
   /**
@@ -298,8 +331,8 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
     );
   }
 
-  function _safeUint208(uint256 x) internal pure returns (uint208 y) {
-    y = uint208(x);
-    require(x == y, "CirculatingMarketCapOracle: uint exceeds 208 bits");
+  function _safeUint176(uint256 x) internal pure returns (uint176 y) {
+    y = uint176(x);
+    require(x == y, "CirculatingMarketCapOracle: uint exceeds 176 bits");
   }
 }

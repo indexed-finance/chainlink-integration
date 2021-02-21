@@ -7,13 +7,14 @@ import "../CirculatingMarketCapOracle.sol";
 contract MockCirculatingMarketCapOracle is CirculatingMarketCapOracle {
   constructor(
     uint256 _delay,
-    uint256 _timeToExpire,
+    uint256 _maximumAge,
+    uint256 _requestTimeout,
     address _oracle,
     bytes32 _jobId,
     address _link
   )
     public
-    CirculatingMarketCapOracle(_delay, _timeToExpire, _oracle, _jobId, _link)
+    CirculatingMarketCapOracle(_delay, _maximumAge, _requestTimeout, _oracle, _jobId, _link)
   {}
 
   function requestCoinGeckoData(address _token) internal override returns (bytes32 requestId) {
