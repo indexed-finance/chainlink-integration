@@ -10,7 +10,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/ICirculatingMarketCapOracle.sol";
 
 
-
 contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMarketCapOracle {
 /* ==========  Events  ========== */
 
@@ -186,14 +185,14 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
 
     // Build path to parse JSON response from CoinGecko
     // e.g. '0x514910771af9ca656af840dff83e8264ecf986ca.eth_market_cap'
-    string memory pathString = string(abi.encodePacked(contractAddressString, ".eth_market_cap"));
+    string memory pathString = string(abi.encodePacked("0x", contractAddressString, ".eth_market_cap"));
     request.add("path", pathString);
 
     // Multiply by 1e18 to format the number as an ether value in wei.
     request.addInt("times", 1e18);
 
     // Sends the request
-    return sendChainlinkRequestTo(oracle, request, fee);
+    requestId = sendChainlinkRequestTo(oracle, request, fee);
   }
 
   /**
