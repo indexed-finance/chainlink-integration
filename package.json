@@ -1,24 +1,37 @@
 {
-  "name": "ndx_link",
-  "version": "1.0.0",
+  "name": "@indexed-finance/chainlink-oracle",
+  "version": "0.0.1",
   "description": "",
   "main": "index.js",
+  "files": [
+    "contracts/interfaces",
+    "contracts/CirculatingMarketCapOracle.sol",
+    "artifacts/contracts/interfaces/ICirculatingMarketCapOracle.sol",
+    "artifacts/contracts/CirculatingMarketCapOracle.sol",
+    "deployments/"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npx hardhat compile",
+    "test": "npx hardhat test",
+    "coverage": "npx hardhat coverage"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.1",
+    "@nomiclabs/hardhat-etherscan": "^2.1.1",
     "@nomiclabs/hardhat-waffle": "^2.0.1",
     "chai": "^4.2.0",
+    "dotenv": "^8.2.0",
     "ethereum-waffle": "^3.2.2",
+    "ethereumjs-wallet": "^0.6.5",
     "ethers": "^5.0.27",
-    "hardhat": "^2.0.8"
+    "hardhat": "^2.0.8",
+    "hardhat-deploy": "^0.7.0-beta.45",
+    "solidity-coverage": "^0.7.15"
   },
   "dependencies": {
     "@chainlink/contracts": "^0.1.6",
-    "@nomiclabs/hardhat-etherscan": "^2.1.1",
     "@openzeppelin/contracts": "^3.3.0"
   }
 }
