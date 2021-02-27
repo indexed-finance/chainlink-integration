@@ -68,7 +68,7 @@ describe('CirculatingMarketCapOracle', function () {
     })
 
     it('fee()', async () => {
-      expect(await chainlinkContract.fee()).to.eq(BigNumber.from(10).pow(17));
+      expect(await chainlinkContract.fee()).to.eq(BigNumber.from(10).pow(17).mul(4));
     })
   })
 
@@ -137,8 +137,6 @@ describe('CirculatingMarketCapOracle', function () {
     });
   });
 
-
-
   describe('cancelExpiredRequest()', function () {
     setupTests();
     let timestamp;
@@ -203,13 +201,13 @@ describe('CirculatingMarketCapOracle', function () {
   describe('fulfill()', () => {
     setupTests();
 
-    it('should revert if market cap exceeds uint176', async () => {
+    it('should revert if market cap exceeds uint168', async () => {
       await chainlinkContract.addTokensToWhitelist([SnxAddress]);
       await chainlinkContract.updateCirculatingMarketCaps([SnxAddress]);
-      const amount = BigNumber.from(2).pow(176);
+      const amount = BigNumber.from(2).pow(168);
       await expect(
         chainlinkContract.fulfill(sha3(SnxAddress), amount)
-      ).to.be.revertedWith('CirculatingMarketCapOracle: uint exceeds 176 bits');
+      ).to.be.revertedWith('CirculatingMarketCapOracle: uint exceeds 168 bits');
     })
 
     it('should mark latest timestamp, update market cap, remove pending request', async () => {
@@ -345,6 +343,45 @@ describe('CirculatingMarketCapOracle', function () {
     it('should be able to withdraw as owner', async function () {
       await chainlinkContract.setChainlinkNodeFee(10000);
       expect(await chainlinkContract.fee()).to.eq(10000);
+    })
+  })
+
+  describe('setJobID()', function () {
+    setupTests();
+
+    it('should not be able to set jobID as non-owner', async function () {
+      await expect(
+        chainlinkContract.connect(addr1).setJobID(`0x${'ff'.repeat(32)}`)
+      ).to.be.revertedWith('Ownable: caller is not the owner');
+    });
+
+    it('should be able to withdraw as owner', async function () {
+      await chainlinkContract.setJobID(`0x${'ff'.repeat(32)}`)
+      expect(await chainlinkContract.jobID()).to.eq(`0x${'ff'.repeat(32)}`)
+    })
+  })
+
+  describe('setTokenOverrideID()', function () {
+    setupTests();
+
+    it('should not be able to set jobID as non-owner', async function () {
+      await expect(
+        chainlinkContract.connect(addr1).setTokenOverrideID(SnxAddress, '')
+      ).to.be.revertedWith('Ownable: caller is not the owner');
+    });
+
+    it('should set override ID', async function () {
+      const id = 'snx'
+      await chainlinkContract.setTokenOverrideID(SnxAddress, id)
+      expect(await chainlinkContract.tokenOverrideIDs(SnxAddress)).to.eq(id)
+      expect((await chainlinkContract.getTokenDetails(SnxAddress)).useOverride).to.be.true
+    })
+
+    it('should remove override ID when null string is given', async function () {
+      const id = ''
+      await chainlinkContract.setTokenOverrideID(SnxAddress, id)
+      expect(await chainlinkContract.tokenOverrideIDs(SnxAddress)).to.eq(id)
+      expect((await chainlinkContract.getTokenDetails(SnxAddress)).useOverride).to.be.false
     })
   })
 });
