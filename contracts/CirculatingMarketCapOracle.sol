@@ -31,15 +31,19 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
   event NewMaximumAge(uint256 maximumAge);
   event NewRequestTimeout(uint256 requestTimeout);
   event NewChainlinkFee(uint256 fee);
+  event NewJobID(bytes32 jobID);
+  event TokenOverrideAdded(address token, string overrideID);
+  event TokenOverrideRemoved(address token);
 
 /* ==========  Structs  ========== */
 
   struct TokenDetails {
     bool whitelisted;
     bool hasPendingRequest;
+    bool useOverride;
     uint32 lastPriceTimestamp;
     uint32 lastRequestTimestamp;
-    uint176 marketCap;
+    uint168 marketCap;
   }
 
 /* ==========  Storage  ========== */
@@ -51,14 +55,18 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
   /** @dev Maximum age of a request before allowing the query to be retried. */
   uint256 public requestTimeout;
   /** @dev Amount of LINK paid for each query */
-  uint256 public fee = 1e17; // 0.1 LINK
+  uint256 public fee = 4e17; // 0.4 LINK
   /** @dev Address of the Chainlink node */
   address public oracle;
   /** @dev Chainlink job ID */
   bytes32 public jobID;
 
+  /** @dev Records for token approval, market cap and status. */
   mapping(address => TokenDetails) public getTokenDetails;
+  /** @dev Records of which addresses are associated with pending requests. */
   mapping(bytes32 => address) public pendingRequestMap;
+  /** @dev Used for wrapper tokens to query the base asset instead of the erc20. */
+  mapping(address => string) public tokenOverrideIDs;
 
   /**
   * @dev Constructor
@@ -241,11 +249,12 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
   }
 
   function _fulfill(bytes32 _requestId, uint256 _marketCap) internal {
-    address tokenAddress = pendingRequestMap[_requestId];
+    address token = pendingRequestMap[_requestId];
 
-    getTokenDetails[tokenAddress].lastPriceTimestamp = uint32(now);
-    getTokenDetails[tokenAddress].marketCap = _safeUint176(_marketCap);
-    getTokenDetails[tokenAddress].hasPendingRequest = false;
+    TokenDetails storage details = getTokenDetails[token];
+    details.lastPriceTimestamp = uint32(now);
+    details.marketCap = _safeUint168(_marketCap);
+    details.hasPendingRequest = false;
 
     delete pendingRequestMap[_requestId];
   }
@@ -315,6 +324,31 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
     emit NewChainlinkFee(_fee);
   }
 
+  /**
+  * @dev Changes the chainlink job ID
+  */
+  function setJobID(bytes32 _jobID) external onlyOwner {
+    jobID = _jobID;
+    emit NewJobID(_jobID);
+  }
+
+  /**
+   * @dev Sets an override ID to use for a token instead of its address.
+   * Note: This will change the API query used to get the market cap.
+   */
+  function setTokenOverrideID(address token, string calldata overrideID) external onlyOwner {
+    TokenDetails storage details = getTokenDetails[token];
+    if (bytes(overrideID).length == 0) {
+      details.useOverride = false;
+      delete tokenOverrideIDs[token];
+      emit TokenOverrideRemoved(token);
+    } else {
+      details.useOverride = true;
+      tokenOverrideIDs[token] = overrideID;
+      emit TokenOverrideAdded(token, overrideID);
+    }
+  }
+
 /* ==========  Utility Functions  ========== */
 
   /**
@@ -342,8 +376,8 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
     );
   }
 
-  function _safeUint176(uint256 x) internal pure returns (uint176 y) {
-    y = uint176(x);
-    require(x == y, "CirculatingMarketCapOracle: uint exceeds 176 bits");
+  function _safeUint168(uint256 x) internal pure returns (uint168 y) {
+    y = uint168(x);
+    require(x == y, "CirculatingMarketCapOracle: uint exceeds 168 bits");
   }
 }
