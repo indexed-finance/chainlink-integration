@@ -18,22 +18,11 @@ contract MockCirculatingMarketCapOracle is CirculatingMarketCapOracle {
   {}
 
   function requestCoinGeckoData(address _token) internal override returns (bytes32 requestId) {
-    return keccak256(abi.encodePacked(_token));
+    (string memory url, string memory key) = getCoingeckoMarketCapUrlAndKey(_token);
+    return keccak256(abi.encodePacked(url, key));
   }
 
   function fulfill(bytes32 _requestId, uint256 _marketCap) external override {
     _fulfill(_requestId, _marketCap);
-  }
-
-  function testUrlDerivation() external pure {
-    address testAddress = 0xf1f1f1F1f1f1F1F1f1F1f1F1F1F1F1f1F1f1f1F1;
-    string memory expectedUrl = "https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=0xf1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1&vs_currencies=eth&include_market_cap=true";
-    string memory realUrl = getCoingeckoMarketCapUrl(
-      addressToString(testAddress)
-    );
-    require(
-      keccak256(abi.encode(expectedUrl)) == keccak256(abi.encode(realUrl)),
-      "Generated URL does not match expected URL"
-    );
   }
 }

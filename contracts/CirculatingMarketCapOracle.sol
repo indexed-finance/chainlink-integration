@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/ICirculatingMarketCapOracle.sol";
 
 
-
 /**
  * @dev Contract for querying tokens' circulating market caps from CoinGecko via Chainlink.
  *
@@ -23,6 +22,10 @@ import "./interfaces/ICirculatingMarketCapOracle.sol";
  * market cap will revert.
  */
 contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMarketCapOracle {
+  string public constant TOKEN_ADDRESS_BASE_URL = "https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=";
+  string public constant TOKEN_ID_BASE_URL = "https://api.coingecko.com/api/v3/simple/price?ids=";
+  string public constant QUERY_PARAMS = "&vs_currencies=eth&include_market_cap=true";
+
 /* ==========  Events  ========== */
 
   event TokenAdded(address token);
@@ -219,17 +222,15 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
       this.fulfill.selector
     );
 
-    string memory contractAddressString = addressToString(_token);
-
     // Build the CoinGecko request URL
-    string memory url = getCoingeckoMarketCapUrl(contractAddressString);
+    (string memory url, string memory tokenKey) = getCoingeckoMarketCapUrlAndKey(_token);
 
     // Set the request object to perform a GET request with the constructed URL
     request.add("get", url);
 
     // Build path to parse JSON response from CoinGecko
     // e.g. '0x514910771af9ca656af840dff83e8264ecf986ca.eth_market_cap'
-    string memory pathString = string(abi.encodePacked("0x", contractAddressString, ".eth_market_cap"));
+    string memory pathString = string(abi.encodePacked(tokenKey, ".eth_market_cap"));
     request.add("path", pathString);
 
     // Multiply by 1e18 to format the number as an ether value in wei.
@@ -358,22 +359,41 @@ contract CirculatingMarketCapOracle is Ownable, ChainlinkClient, ICirculatingMar
     bytes32 value = bytes32(uint256(_addr));
     bytes memory alphabet = "0123456789abcdef";
 
-    bytes memory str = new bytes(40);
+    bytes memory str = new bytes(42);
+    str[0] = "0";
+    str[1] = "x";
     for (uint256 i = 0; i < 20; i++) {
-      str[i*2] = alphabet[uint8(value[i + 12] >> 4)];
-      str[1 + i*2] = alphabet[uint8(value[i + 12] & 0x0f)];
+      str[2*i + 2] = alphabet[uint8(value[i + 12] >> 4)];
+      str[2*i + 3] = alphabet[uint8(value[i + 12] & 0x0f)];
     }
     return string(str);
   }
 
-  function getCoingeckoMarketCapUrl(string memory contractAddressString) public pure returns (string memory url) {
-    url = string(
-      abi.encodePacked(
-        "https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=0x",
-        contractAddressString,
-        "&vs_currencies=eth&include_market_cap=true"
-      )
-    );
+  function getCoingeckoMarketCapUrlAndKey(address token)
+    public
+    view
+    returns (string memory url, string memory tokenKey)
+  {
+    TokenDetails storage details = getTokenDetails[token];
+    if (details.useOverride) {
+      tokenKey = tokenOverrideIDs[token];
+      url = string(
+        abi.encodePacked(
+          TOKEN_ID_BASE_URL,
+          tokenKey,
+          QUERY_PARAMS
+        )
+      );
+    } else {
+      tokenKey = addressToString(token);
+      url = string(
+        abi.encodePacked(
+          TOKEN_ADDRESS_BASE_URL,
+          tokenKey,
+          QUERY_PARAMS
+        )
+      );
+    }
   }
 
   function _safeUint168(uint256 x) internal pure returns (uint168 y) {
