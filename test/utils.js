@@ -22,6 +22,10 @@ async function fastForward(seconds) {
   await mineBlock();
 }
 
+const TOKEN_ADDRESS_BASE_URL = "https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=";
+const TOKEN_ID_BASE_URL = "https://api.coingecko.com/api/v3/simple/price?ids=";
+const QUERY_PARAMS = "&vs_currencies=eth&include_market_cap=true";
+
 module.exports = {
   ChainlinkJobId: '6d1bfe27e7034b1d87b5270556b17277',
   OracleAddress: '0x7AFe1118Ea78C1eae84ca8feE5C65Bc76CcF879e',
@@ -35,5 +39,8 @@ module.exports = {
   mineBlock,
   deploy,
   getTransactionTimestamp,
-  fastForward
+  fastForward,
+  TOKEN_ADDRESS_BASE_URL,
+  TOKEN_ID_BASE_URL,
+  QUERY_PARAMS
 }
